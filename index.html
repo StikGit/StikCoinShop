@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StikCoin Accessory Shop</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>StikCoin Shop</h1>
+        <div id="auth-section">
+            <button id="login-btn" onclick="loginWithTwitch()">Login with Twitch</button>
+            <span id="user-info" class="hidden">
+                Welcome, <strong id="username">Viewer</strong>! 
+                🪙 Balance: <span id="balance">0</span> StikCoins
+            </span>
+        </div>
+    </header>
+
+    <main>
+        <section class="shop-grid">
+            <!-- Item 1 -->
+            <div class="shop-item" data-id="hat_01" data-price="50">
+                <div class="item-image">🎩</div>
+                <h3>Fancy Top Hat</h3>
+                <p class="price">50 StikCoins</p>
+                <button class="buy-btn" onclick="purchaseItem('hat_01', 50)" disabled>Buy Now</button>
+            </div>
+
+            <!-- Item 2 -->
+            <div class="shop-item" data-id="shades_01" data-price="30">
+                <div class="item-image">😎</div>
+                <h3>Cool Sunglasses</h3>
+                <p class="price">30 StikCoins</p>
+                <button class="buy-btn" onclick="purchaseItem('shades_01', 30)" disabled>Buy Now</button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // CONFIGURATION VARIABLES (We will fill these out in Part 2)
+        const TWITCH_CLIENT_ID = 'YOUR_TWITCH_CLIENT_ID';
+        const TUNNEL_URL = 'YOUR_LOCALHOST_RUN_URL'; 
+        const REDIRECT_URI = window.location.origin + window.location.pathname;
+
+        let twitchUsername = "";
+        let accessToken = "";
+
+        // 1. Handle Twitch Login Redirect
+        function loginWithTwitch() {
+            const authUrl = `https://twitch.tv{TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=user:read:email`;
+            window.location.href = authUrl;
+        }
+
+        // 2. Parse URL to check if user just logged in
+        function checkAuth() {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            accessToken = params.get('access_token');
+
+            if (accessToken) {
+                // Clear token from URL bar for cleanliness
+                window.location.hash = '';
+                fetchTwitchUserData();
+            }
+        }
+
+        // 3. Get Username from Twitch using token
+        async function fetchTwitchUserData() {
+            try {
+                const response = await fetch('https://twitch.tv', {
+                    headers: {
+                        'Client-ID': TWITCH_CLIENT_ID,
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+                const data = await response.json();
+                if (data.data && data.data.length > 0) {
+                    twitchUsername = data.data[0].login;
+                    document.getElementById('username').innerText = data.data[0].display_name;
+                    document.getElementById('login-btn').classList.add('hidden');
+                    document.getElementById('user-info').classList.remove('hidden');
+                    
+                    // Enable buy buttons and fetch coin balance from Firebot
+                    fetchBalance();
+                }
+            } catch (err) {
+                console.error("Twitch auth failed:", err);
+            }
+        }
+
+        // 4. Fetch StikCoin Balance from local Firebot
+        async function fetchBalance() {
+            if (!TUNNEL_URL || TUNNEL_URL.includes('YOUR_')) return;
+            try {
+                const response = await fetch(`${TUNNEL_URL}/api/v1/viewers/${twitchUsername}`);
+                const data = await response.json();
+                
+                // Read the StikCoin metadata property from Firebot
+                const coins = data.metadata?.StikCoin || 0;
+                document.getElementById('balance').innerText = coins;
+                
+                // Unlock checkout buttons
+                document.querySelectorAll('.buy-btn').forEach(btn => btn.disabled = false);
+            } catch (err) {
+                alert("Could not connect to the stream shop system. Streamer might be offline!");
+            }
+        }
+
+        // 5. Send Purchase Request to Firebot API Custom Trigger
+        async function purchaseItem(itemId, itemPrice) {
+            const currentBalance = parseInt(document.getElementById('balance').innerText);
+            if (currentBalance < itemPrice) {
+                alert("You do not have enough StikCoins!");
+                return;
+            }
+
+            try {
+                // Execute a custom API command on Firebot to process checkout
+                const response = await fetch(`${TUNNEL_URL}/api/v1/commands/trigger`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        trigger: 'processPurchase',
+                        metadata: {
+                            username: twitchUsername,
+                            itemId: itemId,
+                            price: itemPrice
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    alert("Purchase successful! Checking new balance...");
+                    setTimeout(fetchBalance, 1000); // Refresh balance
+                } else {
+                    alert("Purchase failed. The shop may be locked right now.");
+                }
+            } catch (err) {
+                alert("Connection error trying to submit order.");
+            }
+        }
+
+        // Run checking logic immediately when webpage loads
+        window.onload = checkAuth;
+    </script>
+</body>
+</html>
