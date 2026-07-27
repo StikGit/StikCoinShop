@@ -100,10 +100,10 @@
                 return;
             }
             try {
-                const response = await fetch(`${TUNNEL_URL}/api/v5/viewers/${twitchUsername}`);
+                const response = await fetch(`${TUNNEL_URL}/api/v1/viewers/${twitchUsername}`);
                 const data = await response.json();
                 
-                console.log('Full Firebot v5 response:', data);
+                console.log('Full Firebot response:', data);
                 
                 let coins = 0;
                 if (data.metadata?.StikCoin !== undefined) {
@@ -133,7 +133,7 @@
 
             try {
                 // Execute a custom API command on Firebot to process checkout
-                const response = await fetch(`${TUNNEL_URL}/api/v5/commands/trigger`, {
+                const response = await fetch(`${TUNNEL_URL}/api/v1/commands/trigger`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
