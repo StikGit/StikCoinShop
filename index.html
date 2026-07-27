@@ -40,13 +40,14 @@
 
     <script>
         // CONFIGURATION VARIABLES (Update these with your actual values)
-        const TWITCH_CLIENT_ID = 'su0oi6xvqvc045lle8jfsa6izwfbn0';
+        const TWITCH_CLIENT_ID = '[REDACTED]';
         const TUNNEL_URL = 'http://localhost:7472';
         const REDIRECT_URI = 'https://stikgit.github.io/StikCoinShop/';
 
         let twitchUsername = "";
         let twitchUserId = "";
         let accessToken = "";
+        let stikCoinCurrencyId = null;
 
         // 1. Handle Twitch Login Redirect
         function loginWithTwitch() {
@@ -93,26 +94,48 @@
             }
         }
 
-        // 4. Fetch StikCoin Balance from local Firebot
+        // 4. Get StikCoin Currency ID from Firebot
+        async function getStikCoinCurrencyId() {
+            if (!TUNNEL_URL || TUNNEL_URL.includes('YOUR_')) {
+                console.log('TUNNEL_URL not set or still has placeholder');
+                return null;
+            }
+            try {
+                const response = await fetch(`${TUNNEL_URL}/api/v1/currency/StikCoin`);
+                if (!response.ok) {
+                    throw new Error('StikCoin currency not found in Firebot');
+                }
+                const data = await response.json();
+                stikCoinCurrencyId = data.id;
+                console.log('StikCoin Currency ID:', stikCoinCurrencyId);
+                return stikCoinCurrencyId;
+            } catch (err) {
+                console.error('Error fetching currency ID:', err);
+                return null;
+            }
+        }
+
+        // 5. Fetch StikCoin Balance from local Firebot
         async function fetchBalance() {
             if (!TUNNEL_URL || TUNNEL_URL.includes('YOUR_')) {
                 console.log('TUNNEL_URL not set or still has placeholder');
                 return;
             }
             try {
-                const response = await fetch(`${TUNNEL_URL}/api/v1/viewers/${twitchUsername}`);
-                const data = await response.json();
-                
-                console.log('Full Firebot response:', data);
-                
-                let coins = 0;
-                if (data.metadata?.StikCoin !== undefined) {
-                    coins = data.metadata.StikCoin;
-                    console.log('Found balance in metadata.StikCoin:', coins);
-                } else {
-                    console.log('Balance not found. Available metadata keys:', Object.keys(data.metadata || {}));
+                // Ensure we have the currency ID
+                if (!stikCoinCurrencyId) {
+                    await getStikCoinCurrencyId();
                 }
                 
+                if (!stikCoinCurrencyId) {
+                    throw new Error('Could not get StikCoin currency ID');
+                }
+                
+                // Fetch balance using currency API with username parameter
+                const response = await fetch(`${TUNNEL_URL}/api/v1/viewers/${twitchUsername}/currency/${stikCoinCurrencyId}?username=true`);
+                const coins = await response.json();
+                
+                console.log('StikCoin balance:', coins);
                 document.getElementById('balance').innerText = coins;
                 
                 // Unlock checkout buttons
@@ -123,7 +146,7 @@
             }
         }
 
-        // 5. Send Purchase Request to Firebot API Custom Trigger
+        // 6. Send Purchase Request to Firebot API - Deduct from Currency
         async function purchaseItem(itemId, itemPrice) {
             const currentBalance = parseInt(document.getElementById('balance').innerText);
             if (currentBalance < itemPrice) {
@@ -131,35 +154,43 @@
                 return;
             }
 
+            if (!stikCoinCurrencyId) {
+                alert("Currency system not initialized. Please refresh and try again.");
+                return;
+            }
+
             try {
-                // Execute a custom API command on Firebot to process checkout
-                const response = await fetch(`${TUNNEL_URL}/api/v1/commands/trigger`, {
+                // Deduct coins from user's currency
+                const newBalance = currentBalance - itemPrice;
+                const response = await fetch(`${TUNNEL_URL}/api/v1/viewers/${twitchUsername}/currency/${stikCoinCurrencyId}?username=true`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        trigger: 'processPurchase',
-                        metadata: {
-                            username: twitchUsername,
-                            userId: twitchUserId,
-                            itemId: itemId,
-                            price: itemPrice
-                        }
+                        amount: newBalance,
+                        setAmount: true
                     })
                 });
 
                 if (response.ok) {
-                    alert("Purchase successful! Checking new balance...");
-                    setTimeout(fetchBalance, 1000); // Refresh balance
+                    alert(`Purchase successful! You bought ${itemId}. New balance: ${newBalance} StikCoins`);
+                    document.getElementById('balance').innerText = newBalance;
                 } else {
                     alert("Purchase failed. The shop may be locked right now.");
+                    fetchBalance(); // Refresh to get actual balance
                 }
             } catch (err) {
+                console.error('Purchase error:', err);
                 alert("Connection error trying to submit order.");
             }
         }
 
         // Run checking logic immediately when webpage loads
-        window.onload = checkAuth;
+        window.onload = () => {
+            checkAuth();
+            // Preload currency ID if possible
+            getStikCoinCurrencyId().catch(() => console.log('Currency ID will be fetched on login'));
+        };
+    
     </script>
 
 </body>
