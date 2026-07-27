@@ -40,16 +40,16 @@
 
     <script>
         // CONFIGURATION VARIABLES (Update these with your actual values)
-        const TWITCH_CLIENT_ID = 'su0oi6xvqvc045lle8jfsa6izwfbn0';  // FIXED: Added quotes
-        const TUNNEL_URL = 'YOUR_LOCALHOST_RUN_URL'; 
-        const REDIRECT_URI = 'https://stikgit.github.io/StikCoinShop/';  // FIXED: Added quotes
+        const TWITCH_CLIENT_ID = '[REDACTED]';  // Replace with your actual Twitch Client ID
+        const TUNNEL_URL = 'http://localhost:7472';  // Replace with ngrok/localtunnel URL for remote access
+        const REDIRECT_URI = 'https://stikgit.github.io/StikCoinShop/';
 
         let twitchUsername = "";
+        let twitchUserId = "";
         let accessToken = "";
 
         // 1. Handle Twitch Login Redirect
         function loginWithTwitch() {
-            // FIXED: Corrected OAuth URL format
             const authUrl = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=user:read:email`;
             window.location.href = authUrl;
         }
@@ -67,10 +67,9 @@
             }
         }
 
-        // 3. Get Username from Twitch using token
+        // 3. Get Username and User ID from Twitch using token
         async function fetchTwitchUserData() {
             try {
-                // FIXED: Corrected Twitch API endpoint
                 const response = await fetch('https://api.twitch.tv/helix/users', {
                     headers: {
                         'Client-ID': TWITCH_CLIENT_ID,
@@ -80,7 +79,9 @@
                 const data = await response.json();
                 if (data.data && data.data.length > 0) {
                     twitchUsername = data.data[0].login;
+                    twitchUserId = data.data[0].id;
                     document.getElementById('username').innerText = data.data[0].display_name;
+                    console.log('Twitch User ID:', twitchUserId);
                     document.getElementById('login-btn').classList.add('hidden');
                     document.getElementById('user-info').classList.remove('hidden');
                     
@@ -94,18 +95,30 @@
 
         // 4. Fetch StikCoin Balance from local Firebot
         async function fetchBalance() {
-            if (!TUNNEL_URL || TUNNEL_URL.includes('YOUR_')) return;
+            if (!TUNNEL_URL || TUNNEL_URL.includes('YOUR_')) {
+                console.log('TUNNEL_URL not set or still has placeholder');
+                return;
+            }
             try {
-                const response = await fetch(`${TUNNEL_URL}/api/v1/viewers/${twitchUsername}`);
+                const response = await fetch(`${TUNNEL_URL}/api/v5/viewers/${twitchUsername}`);
                 const data = await response.json();
                 
-                // Read the StikCoin metadata property from Firebot
-                const coins = data.metadata?.StikCoin || 0;
+                console.log('Full Firebot v5 response:', data);
+                
+                let coins = 0;
+                if (data.metadata?.StikCoin !== undefined) {
+                    coins = data.metadata.StikCoin;
+                    console.log('Found balance in metadata.StikCoin:', coins);
+                } else {
+                    console.log('Balance not found. Available metadata keys:', Object.keys(data.metadata || {}));
+                }
+                
                 document.getElementById('balance').innerText = coins;
                 
                 // Unlock checkout buttons
                 document.querySelectorAll('.buy-btn').forEach(btn => btn.disabled = false);
             } catch (err) {
+                console.error('Balance fetch error:', err);
                 alert("Could not connect to the stream shop system. Streamer might be offline!");
             }
         }
@@ -120,13 +133,14 @@
 
             try {
                 // Execute a custom API command on Firebot to process checkout
-                const response = await fetch(`${TUNNEL_URL}/api/v1/commands/trigger`, {
+                const response = await fetch(`${TUNNEL_URL}/api/v5/commands/trigger`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         trigger: 'processPurchase',
                         metadata: {
                             username: twitchUsername,
+                            userId: twitchUserId,
                             itemId: itemId,
                             price: itemPrice
                         }
