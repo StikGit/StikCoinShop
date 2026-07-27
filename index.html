@@ -82,11 +82,12 @@
                     twitchUsername = data.data[0].login;
                     twitchUserId = data.data[0].id;
                     document.getElementById('username').innerText = data.data[0].display_name;
+                    console.log('Twitch Username:', twitchUsername);
                     console.log('Twitch User ID:', twitchUserId);
                     document.getElementById('login-btn').classList.add('hidden');
                     document.getElementById('user-info').classList.remove('hidden');
                     
-                    // Enable buy buttons and fetch coin balance from Firebot
+                    // Fetch coin balance from Firebot
                     fetchBalance();
                 }
             } catch (err) {
@@ -101,13 +102,15 @@
                 return null;
             }
             try {
+                console.log('Fetching StikCoin currency ID from:', `${TUNNEL_URL}/api/v1/currency/StikCoin`);
                 const response = await fetch(`${TUNNEL_URL}/api/v1/currency/StikCoin`);
                 if (!response.ok) {
+                    console.error('Currency fetch error:', response.status, response.statusText);
                     throw new Error('StikCoin currency not found in Firebot');
                 }
                 const data = await response.json();
                 stikCoinCurrencyId = data.id;
-                console.log('StikCoin Currency ID:', stikCoinCurrencyId);
+                console.log('✓ StikCoin Currency ID found:', stikCoinCurrencyId);
                 return stikCoinCurrencyId;
             } catch (err) {
                 console.error('Error fetching currency ID:', err);
@@ -115,7 +118,7 @@
             }
         }
 
-        // 5. Fetch StikCoin Balance from local Firebot
+        // 5. Fetch StikCoin Balance from local Firebot using Currency API
         async function fetchBalance() {
             if (!TUNNEL_URL || TUNNEL_URL.includes('YOUR_')) {
                 console.log('TUNNEL_URL not set or still has placeholder');
@@ -124,6 +127,7 @@
             try {
                 // Ensure we have the currency ID
                 if (!stikCoinCurrencyId) {
+                    console.log('Currency ID not cached, fetching...');
                     await getStikCoinCurrencyId();
                 }
                 
@@ -132,10 +136,18 @@
                 }
                 
                 // Fetch balance using currency API with username parameter
-                const response = await fetch(`${TUNNEL_URL}/api/v1/viewers/${twitchUsername}/currency/${stikCoinCurrencyId}?username=true`);
+                const balanceUrl = `${TUNNEL_URL}/api/v1/viewers/${twitchUsername}/currency/${stikCoinCurrencyId}?username=true`;
+                console.log('Fetching balance from:', balanceUrl);
+                
+                const response = await fetch(balanceUrl);
+                if (!response.ok) {
+                    console.error('Balance fetch error:', response.status, response.statusText);
+                    throw new Error('Failed to fetch balance');
+                }
+                
                 const coins = await response.json();
                 
-                console.log('StikCoin balance:', coins);
+                console.log('✓ StikCoin balance received:', coins);
                 document.getElementById('balance').innerText = coins;
                 
                 // Unlock checkout buttons
@@ -162,7 +174,10 @@
             try {
                 // Deduct coins from user's currency
                 const newBalance = currentBalance - itemPrice;
-                const response = await fetch(`${TUNNEL_URL}/api/v1/viewers/${twitchUsername}/currency/${stikCoinCurrencyId}?username=true`, {
+                const purchaseUrl = `${TUNNEL_URL}/api/v1/viewers/${twitchUsername}/currency/${stikCoinCurrencyId}?username=true`;
+                console.log('Sending purchase request to:', purchaseUrl);
+                
+                const response = await fetch(purchaseUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -173,8 +188,10 @@
 
                 if (response.ok) {
                     alert(`Purchase successful! You bought ${itemId}. New balance: ${newBalance} StikCoins`);
+                    console.log('✓ Purchase completed');
                     document.getElementById('balance').innerText = newBalance;
                 } else {
+                    console.error('Purchase failed:', response.status, response.statusText);
                     alert("Purchase failed. The shop may be locked right now.");
                     fetchBalance(); // Refresh to get actual balance
                 }
@@ -186,8 +203,9 @@
 
         // Run checking logic immediately when webpage loads
         window.onload = () => {
+            console.log('Page loaded. TUNNEL_URL:', TUNNEL_URL);
             checkAuth();
-            // Preload currency ID if possible
+            // Preload currency ID
             getStikCoinCurrencyId().catch(() => console.log('Currency ID will be fetched on login'));
         };
     
