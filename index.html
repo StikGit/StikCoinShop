@@ -14,6 +14,7 @@
             <span id="user-info" class="hidden">
                 Welcome, <strong id="username">Viewer</strong>! 
                 🪙 Balance: <span id="balance">0</span> StikCoins
+                <button id="logout-btn" onclick="logout()" style="margin-left: 10px; padding: 5px 10px;">Logout</button>
             </span>
         </div>
     </header>
@@ -40,7 +41,7 @@
 
     <script>
         // CONFIGURATION VARIABLES (Update these with your actual values)
-        const TWITCH_CLIENT_ID = 'su0oi6xvqvc045lle8jfsa6izwfbn0';
+        const TWITCH_CLIENT_ID = '[REDACTED]';
         const TUNNEL_URL = 'http://localhost:7472';
         const REDIRECT_URI = 'https://stikgit.github.io/StikCoinShop/';
 
@@ -65,6 +66,17 @@
                 // Clear token from URL bar for cleanliness
                 window.location.hash = '';
                 fetchTwitchUserData();
+            } else {
+                // Check if we have a stored session
+                const storedSession = localStorage.getItem('stikCoinSession');
+                if (storedSession) {
+                    const session = JSON.parse(storedSession);
+                    twitchUsername = session.username;
+                    twitchUserId = session.userId;
+                    accessToken = session.accessToken;
+                    console.log('Restored session for:', twitchUsername);
+                    restoreSession();
+                }
             }
         }
 
@@ -84,6 +96,14 @@
                     document.getElementById('username').innerText = data.data[0].display_name;
                     console.log('Twitch Username:', twitchUsername);
                     console.log('Twitch User ID:', twitchUserId);
+                    
+                    // Store session in localStorage
+                    localStorage.setItem('stikCoinSession', JSON.stringify({
+                        username: twitchUsername,
+                        userId: twitchUserId,
+                        accessToken: accessToken
+                    }));
+                    
                     document.getElementById('login-btn').classList.add('hidden');
                     document.getElementById('user-info').classList.remove('hidden');
                     
@@ -93,6 +113,38 @@
             } catch (err) {
                 console.error("Twitch auth failed:", err);
             }
+        }
+
+        // Restore session after page reload
+        function restoreSession() {
+            document.getElementById('login-btn').classList.add('hidden');
+            document.getElementById('user-info').classList.remove('hidden');
+            
+            // Get display name from localStorage or use username
+            const storedSession = localStorage.getItem('stikCoinSession');
+            if (storedSession) {
+                const session = JSON.parse(storedSession);
+                document.getElementById('username').innerText = session.username;
+            }
+            
+            // Fetch coin balance from Firebot
+            fetchBalance();
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('stikCoinSession');
+            twitchUsername = "";
+            twitchUserId = "";
+            accessToken = "";
+            stikCoinCurrencyId = null;
+            
+            document.getElementById('login-btn').classList.remove('hidden');
+            document.getElementById('user-info').classList.add('hidden');
+            document.getElementById('balance').innerText = "0";
+            document.querySelectorAll('.buy-btn').forEach(btn => btn.disabled = true);
+            
+            console.log('Logged out');
         }
 
         // 4. Get StikCoin Currency ID from Firebot
