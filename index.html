@@ -41,8 +41,8 @@
 
     <script>
         // CONFIGURATION VARIABLES (Update these with your actual values)
-        const TWITCH_CLIENT_ID = 'su0oi6xvqvc045lle8jfsa6izwfbn0';
-        const TUNNEL_URL = 'http://localhost:7472';
+        const TWITCH_CLIENT_ID = '[REDACTED]';
+        const TUNNEL_URL = 'https://shop.stikcoin.uk';
         const REDIRECT_URI = 'https://stikgit.github.io/StikCoinShop/';
 
         let twitchUsername = "";
@@ -170,7 +170,7 @@
             }
         }
 
-        // 5. Fetch StikCoin Balance from local Firebot using Currency API
+        // 5. Fetch StikCoin Balance from Firebot using Currency API
         async function fetchBalance() {
             if (!TUNNEL_URL || TUNNEL_URL.includes('YOUR_')) {
                 console.log('TUNNEL_URL not set or still has placeholder');
